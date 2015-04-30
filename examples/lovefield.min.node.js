@@ -2523,23 +2523,94 @@ goog.math.angleDifference = function(a, b) {
 goog.math.sign = function(a) {
     return 0 == a ? 0 : 0 > a ? -1 : 1
 };
-goog.math.longestCommonSubsequence = function(a, b, c, d) {
-    c = c || function(a, b) {
-        return a == b
-    };
-    d = d || function(b) {
-        return a[b]
-    };
-    for (var e = a.length, f = b.length, g = [], h = 0; h < e + 1; h++)
-        g[h] = [], g[h][0] = 0;
-    for (var k = 0; k < f + 1; k++)
-        g[0][k] = 0;
-    for (h = 1; h <= e; h++)
-        for (k = 1; k <= f; k++)
-            c(a[h - 1], b[k - 1]) ? g[h][k] = g[h - 1][k - 1] + 1 : g[h][k] = Math.max(g[h - 1][k], g[h][k - 1]);
-    for (var l = [], h = e, k = f; 0 < h && 0 < k; )
-        c(a[h - 1], b[k - 1]) ? (l.unshift(d(h - 1, k - 1)), h--, k--) : g[h - 1][k] > g[h][k - 1] ? h-- : k--;
-    return l
+/**
+ * JavaScript implementation of Longest Common Subsequence problem.
+ * http://en.wikipedia.org/wiki/Longest_common_subsequence
+ *
+ * Returns the longest possible array that is subarray of both of given arrays.
+ *
+ * @param {Array<Object>} array1 First array of objects.
+ * @param {Array<Object>} array2 Second array of objects.
+ * @param {Function=} opt_compareFn Function that acts as a custom comparator
+ *     for the array ojects. Function should return true if objects are equal,
+ *     otherwise false.
+ * @param {Function=} opt_collectorFn Function used to decide what to return
+ *     as a result subsequence. It accepts 2 arguments: index of common element
+ *     in the first array and index in the second. The default function returns
+ *     element from the first array.
+ * @return {!Array<Object>} A list of objects that are common to both arrays
+ *     such that there is no common subsequence with size greater than the
+ *     length of the list.
+ */
+goog.math.longestCommonSubsequence = function(
+    array1, array2, opt_compareFn, opt_collectorFn) {
+
+  var compare = opt_compareFn || function(a, b) {
+    return a == b;
+  };
+
+  var collect = opt_collectorFn || function(i1, i2) {
+    return array1[i1];
+  };
+
+  var length1 = array1.length;
+  var length2 = array2.length;
+
+  var arr = [];
+  for (var i = 0; i < length1 + 1; i++) {
+    arr[i] = [];
+    arr[i][0] = 0;
+  }
+
+  for (var j = 0; j < length2 + 1; j++) {
+    arr[0][j] = 0;
+  }
+
+  for (i = 1; i <= length1; i++) {
+    for (j = 1; j <= length2; j++) {
+      if (compare(array1[i - 1], array2[j - 1])) {
+        arr[i][j] = arr[i - 1][j - 1] + 1;
+      } else {
+        arr[i][j] = Math.max(arr[i - 1][j], arr[i][j - 1]);
+      }
+    }
+  }
+
+  // Backtracking
+  var result = [];
+  var i = length1, j = length2;
+  while (i > 0 && j > 0) {
+    if (compare(array1[i - 1], array2[j - 1])) {
+      if(collect instanceof Array) {
+        // Return 2D array for array of collectors
+        for (var ci = 0; ci < collect.length; ci++) {
+          if(result.length === ci) {
+            result.push([]);
+          }
+          result[ci].unshift(collect[ci](i - 1, j - 1));
+        }
+      } else {
+        result.unshift(collect(i - 1, j - 1));
+      }
+      i--;
+      j--;
+    } else {
+      if (arr[i - 1][j] > arr[i][j - 1]) {
+        i--;
+      } else {
+        j--;
+      }
+    }
+  }
+
+  if(result.length === 0 && collect instanceof Array && collect.length > 0) {
+    // Empty result with multiple collectors still needs 2D array
+    result = [];
+    collect.forEach(function() {
+      result.push([]);
+    });
+  }
+  return result;
 };
 goog.math.sum = function(a) {
     return goog.array.reduce(arguments, function(a, c) {
@@ -8701,20 +8772,27 @@ lf.DiffCalculator.prototype.comparator_ = function(a, b) {
 lf.DiffCalculator.prototype.applyDiff = function(oldResults, newResults) {
   var oldEntries = goog.isNull(oldResults) ? [] : oldResults.entries;
 
-  // Detecting and applying deletions.
-  var longestCommonSubsequenceLeft = goog.math.longestCommonSubsequence(
+  var sequenceCollectors = [
+    // Detecting and applying deletions.
+    function(indexLeft, indexRight) {
+      return oldEntries[indexLeft];
+    },
+    // Detecting and applying additions.
+    function(indexLeft, indexRight) {
+      return newResults.entries[indexRight];
+    }
+  ];
+
+  var longestCommonSubsequences = goog.math.longestCommonSubsequence(
       oldEntries, newResults.entries,
-      goog.bind(this.comparator_, this),
-      function(indexLeft, indexRight) {
-        return oldEntries[indexLeft];
-      });
+      goog.bind(this.comparator_, this), sequenceCollectors);
 
   var changeRecords = [];
 
   var commonIndex = 0;
   for (var i = 0; i < oldEntries.length; i++) {
     var entry = oldEntries[i];
-    if (longestCommonSubsequenceLeft[commonIndex] == entry) {
+    if (longestCommonSubsequences[0][commonIndex] == entry) {
       commonIndex++;
       continue;
     } else {
@@ -8725,18 +8803,10 @@ lf.DiffCalculator.prototype.applyDiff = function(oldResults, newResults) {
     }
   }
 
-  // Detecting and applying additions.
-  var longestCommonSubsequenceRight = goog.math.longestCommonSubsequence(
-      oldEntries, newResults.entries,
-      goog.bind(this.comparator_, this),
-      function(indexLeft, indexRight) {
-        return newResults.entries[indexRight];
-      });
-
   commonIndex = 0;
   for (var i = 0; i < newResults.entries.length; i++) {
     var entry = newResults.entries[i];
-    if (longestCommonSubsequenceRight[commonIndex] == entry) {
+    if (longestCommonSubsequences[1][commonIndex] == entry) {
       commonIndex++;
       continue;
     } else {

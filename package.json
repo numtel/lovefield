@@ -27,7 +27,9 @@
   },
   "dependencies": {
     "js-yaml": "~3.1.0",
-    "nopt": "~2.2.1"
+    "nopt": "~2.2.1",
+    "random-strings": "^0.0.1",
+    "lodash": "^3.7.0"
   },
   "devDependencies": {
     "glob": "~3.2.6",
